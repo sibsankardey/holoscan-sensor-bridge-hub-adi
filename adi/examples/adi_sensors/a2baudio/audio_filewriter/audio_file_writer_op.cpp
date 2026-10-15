@@ -128,7 +128,8 @@ void AudioFileWriterOp::compute(holoscan::InputContext& input, holoscan::OutputC
     uint32_t write_start_idx = (chunk_start < start_sample_) ? (start_sample_ - chunk_start) : 0;
     uint32_t write_end_idx =
         (chunk_end > stop_sample_) ? (stop_sample_ - chunk_start) : num_samples;
-    uint32_t write_samples = write_end_idx - write_start_idx;
+    uint32_t write_samples = (write_end_idx > write_start_idx) ?
+                                            write_end_idx - write_start_idx : 0;
 
     if (!recording_started_ && write_samples > 0) {
       recording_started_ = true;

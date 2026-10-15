@@ -36,6 +36,8 @@ import yaml
 
 # import time
 
+_MIPI_CODES = {1000: 0x0004, 1500: 0x0003, 2000: 0x0002, 2500: 0x0001}
+
 
 def print_ccb_mode_table(modes):
     """Print the modes reported by the ADSD3500 CCB."""
@@ -1296,7 +1298,7 @@ def main():
         type=int,
         default=3,
         required=False,
-        help="numPlanes (2 (Depth + AB) or 3 (Depth + AB + Conf))",
+        help="numPlanes (2 (Depth + AB) or 3 (Depth + AB + Conf)). Only 3 is supported",
     )
 
     parser.add_argument(
@@ -1318,9 +1320,10 @@ def main():
     parser.add_argument(
         "--maxMipi",
         type=int,
-        default=1,
+        default=2500,
+        choices=[1000, 1500, 2000, 2500],
         required=False,
-        help="Max supported Mipi per lane speed (default 1=2.5Gbps,2=2Gbps, 3= 1.5Gbps, 4=1Gbps supported), refer readme",
+        help="Max supported MIPI lane speed in Mbps (1000/1500/2000/2500, default 2500), refer readme",
     )
 
     parser.add_argument(
@@ -1412,6 +1415,10 @@ def main():
     if not (0 <= args.resetPin <= 31):
         print(f"Error: --resetPin must be 0-31, got {args.resetPin}")
         sys.exit(1)
+    # Validate resetPin range
+    if not (3 == args.numPlanes):
+        print(f"Error: --numPlanes must be 3, got {args.numPlanes}")
+        sys.exit(1)
 
     (cu_result,) = cuda.cuInit(0)
     assert cu_result == cuda.CUresult.CUDA_SUCCESS
@@ -1436,7 +1443,7 @@ def main():
         num_planes=args.numPlanes,
         tof_fps=args.captureFps,
         metadata_sz=args.metadata,
-        mipi_lane_speed=args.maxMipi,
+        mipi_lane_speed=_MIPI_CODES[args.maxMipi],
     )
 
     # Establish a connection to the hololink device

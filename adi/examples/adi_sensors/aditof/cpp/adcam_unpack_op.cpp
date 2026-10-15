@@ -154,6 +154,11 @@ void ADTFUnpackOp::start() {
   frame_size_ = width_.get() * height_.get();
   pixel_size_ = num_planes_ == 2 ? 4 : 5;
 
+  if (num_planes_ != 3) {
+    throw std::runtime_error(fmt::format("num_planes = 3 supported now, input was {}",
+                                         num_planes_));
+  }
+
   // For profiling
   fps_window_start_ = Clock::now();
   frames_received_ = 0;

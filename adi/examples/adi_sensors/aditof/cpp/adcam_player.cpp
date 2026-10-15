@@ -453,9 +453,9 @@ int main(int argc, char** argv) {
       } else if (opt->name == std::string("numPlanes")) {
         num_planes = std::stoi(argument);
 
-        if (num_planes < 2 || num_planes > 3) {
+        if (num_planes != 3) {
           throw std::runtime_error(fmt::format(
-              "Unhandled numPlanes (2 (Depth + AB) or 3 (Depth + AB + Conf)) \"{}\"", num_planes));
+              "numPlanes 2 (Depth+AB) or 3 (D+AB+Conf). 3 supported, input \"{}\"", num_planes));
         }
       } else if (opt->name == std::string("captureFps")) {
         tof_fps = std::stoi(argument);

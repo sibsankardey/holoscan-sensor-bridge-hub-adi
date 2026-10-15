@@ -40,8 +40,8 @@ Current support includes:
 | Industrial IMU | ADIS16607 | Supported | Precision miniature MEMS inertial measurement unit | [ADIS16607 product page](https://www.analog.com/en/products/adis16607.html) |
 | A2B Audio | AD2428 | Supported | A2B transceiver used for the master node | [AD2428 product page](https://www.analog.com/en/products/ad2428.html) |
 | A2B Audio | AD2427 | Supported | A2B transceiver used for microphone nodes | [AD2427 product page](https://www.analog.com/en/products/ad2427.html) |
-| Sensor Connectivity | NVIDIA Holoscan Sensor Bridge | Supported | FPGA-based sensor connectivity platform | [Holoscan Sensor Bridge repository](https://github.com/nvidia-holoscan/holoscan-sensor-bridge) |
-| AI Compute | NVIDIA Jetson / IGX / DGX Spark | Supported | GPU-accelerated AI processing platforms | [NVIDIA Holoscan product page](https://www.nvidia.com/en-us/clara/holoscan/) |
+| Sensor Connectivity | NVIDIA Holoscan Sensor Bridge | Supported | FPGA-based sensor connectivity platform | [Lattice FPGA](https://www.latticesemi.com/Products/DevelopmentBoardsAndKits/lattice-nvidia-edge-ai), [Microchip FPGA](https://www.microchip.com/en-us/products/fpgas-and-plds/boards-and-kits/ethernet-sensor-bridge) |
+| AI Compute | NVIDIA Jetson / IGX / DGX Spark | Supported | GPU-accelerated AI processing platforms | [NVIDIA Holoscan Sensor Bridge](https://www.nvidia.com/en-us/technologies/holoscan-sensor-bridge/) |
 
 ## Repository Layout
 
