@@ -4,6 +4,10 @@ on:
   push:
     branches: [main]
   pull_request:
+  # Weekly full check of main, to catch links that break without a commit.
+  # Scheduled runs always use the default branch (main).
+  schedule:
+    - cron: "17 6 * * 1" # Mondays 06:17 UTC
 jobs:
   check-urls:
     runs-on: ubuntu-latest
@@ -17,50 +21,90 @@ jobs:
     - name: Get changed files in the PR
       if: github.event_name == 'pull_request'
       id: changed-files
+      env:
+        BASE_REF: ${{ github.base_ref }}
       run: |
-        # Get changed files using git diff
-        if git diff --name-only --diff-filter=d origin/${{ github.base_ref }}..HEAD | grep -E '\.(md|html|rst)$' > changed_files.txt; then
+        # Keep filenames in a file only — never interpolate them into run/action
+        # args (GitHub Actions script injection / lychee-action eval).
+        # BASE_REF is passed via env so branch names cannot inject into the script.
+        if git diff --name-only --diff-filter=d "origin/${BASE_REF}..HEAD" | grep -E '\.(md|html|rst)$' > changed_files.txt; then
           if [ -s changed_files.txt ]; then
-            echo "any_changed=true" >> $GITHUB_OUTPUT
-            echo "changed_files_list=$(cat changed_files.txt | sed 's|^|'"'"'${{ github.workspace }}/|; s|$|'"'"'|' | tr '\n' ' ')" >> $GITHUB_OUTPUT
+            echo "any_changed=true" >> "$GITHUB_OUTPUT"
+            while IFS= read -r rel; do
+              printf '%s\n' "${GITHUB_WORKSPACE}/${rel}"
+            done < changed_files.txt > changed_files_abs.txt
           else
-            echo "any_changed=false" >> $GITHUB_OUTPUT
+            echo "any_changed=false" >> "$GITHUB_OUTPUT"
           fi
         else
-          echo "any_changed=false" >> $GITHUB_OUTPUT
+          echo "any_changed=false" >> "$GITHUB_OUTPUT"
         fi
 
     - name: Echo changed files in the PR
       if: github.event_name == 'pull_request' && steps.changed-files.outputs.any_changed == 'true'
       run: |
-        echo "Files being checked: ${{ steps.changed-files.outputs.changed_files_list }}"
+        echo "Files being checked:"
+        cat changed_files.txt
 
     # Pass 1: lychee checks everything. It does not fail the job; its failures are
     # written to a JSON report and re-verified in pass 2, because lychee cannot
     # reach some sites that gate on TLS fingerprint (e.g. analog.com behind a WAF).
+    # PR path invokes lychee directly with a file-backed argv list so attacker-
+    # controlled filenames never enter workflow expressions or lychee-action eval.
     - name: URL checker (PR - changed files only)
       if: github.event_name == 'pull_request' && steps.changed-files.outputs.any_changed == 'true'
-      uses: lycheeverse/lychee-action@v2
-      with:
-        workingDirectory: .github/workflows
-        format: json
-        output: lychee-report.json
-        jobSummary: false
-        args: >-
-          --accept=200,403,429
-          --max-retries=5
-          --retry-wait-time=2
-          --no-progress
-          --root-dir=${{ github.workspace }}
-          --remap='(file://.*)/holoscan-sdk/(.*) https://github.com/nvidia-holoscan/holoscan-sdk/tree/main/$2'
-          ${{ steps.changed-files.outputs.changed_files_list }}
-        fail: false
-        failIfEmpty: false
+      env:
+        # lychee uses GITHUB_TOKEN for GitHub API auth / rate limits (same as lychee-action).
+        GITHUB_TOKEN: ${{ github.token }}
+      run: |
+        set -euo pipefail
+        # Keep in sync with lycheeVersion in the push job below so both paths
+        # accept the same flags (v0.16.x has no --root-dir). The tarball is checked
+        # against the SHA-256 published with the release and unpacked under
+        # RUNNER_TEMP, never in the checked-out PR tree.
+        LYCHEE_VERSION=v0.24.2
+        LYCHEE_SHA256=1f4e0ef7f6554a6ed33dd7ac144fb2e1bbed98598e7af973042fc5cd43951c9a
+        FILENAME=lychee-x86_64-unknown-linux-gnu.tar.gz
+        REPORT=".github/workflows/lychee-report.json"
+        LYCHEE_DIR="$(mktemp -d "${RUNNER_TEMP}/lychee.XXXXXX")"
+        curl -sSfL --proto '=https' -o "${LYCHEE_DIR}/${FILENAME}" \
+          "https://github.com/lycheeverse/lychee/releases/download/lychee-${LYCHEE_VERSION}/${FILENAME}"
+        echo "${LYCHEE_SHA256}  ${LYCHEE_DIR}/${FILENAME}" | sha256sum -c -
+        tar -xzf "${LYCHEE_DIR}/${FILENAME}" -C "${LYCHEE_DIR}"
+        LYCHEE="${LYCHEE_DIR}/lychee-x86_64-unknown-linux-gnu/lychee"
+        "${LYCHEE}" --version
+
+        mapfile -t files < changed_files_abs.txt
+        rm -f "${REPORT}"
+        set +e
+        # --root-dir only resolves root-relative links (/path); relative links
+        # resolve against the file that contains them. Do not use --base, which
+        # resolves every relative link against one directory.
+        "${LYCHEE}" \
+          --accept=200,403,429 \
+          --max-retries=5 \
+          --retry-wait-time=2 \
+          --no-progress \
+          --root-dir="${GITHUB_WORKSPACE}" \
+          --remap='(file://.*)/holoscan-sdk/(.*) https://github.com/nvidia-holoscan/holoscan-sdk/tree/main/$2' \
+          --format json \
+          --output "${REPORT}" \
+          "${files[@]}"
+        set -e
+        # Link failures are re-verified in pass 2, but a missing report means
+        # lychee never ran successfully — fail rather than skipping URL checks.
+        if [ ! -f "${REPORT}" ]; then
+          echo "lychee did not produce ${REPORT}" >&2
+          exit 1
+        fi
+        exit 0
 
     - name: URL checker (all files)
-      if: github.event_name == 'push'
+      if: github.event_name == 'push' || github.event_name == 'schedule'
       uses: lycheeverse/lychee-action@v2
       with:
+        # Keep in sync with LYCHEE_VERSION in the PR job above.
+        lycheeVersion: v0.24.2
         workingDirectory: .github/workflows
         format: json
         output: lychee-report.json
